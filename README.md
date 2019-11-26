@@ -9,3 +9,5 @@ to draw attention to usage of system functions call.
  This program hides the first argument from itself.
  2.  `ps-lsof-implementation` - shows, how can we obtain information we get from 
  `ps` and `lsof` commands from /proc/ filesystem. 
+ 3. `fuse` A simple fuse filesystem driver, demonstrating mounting
+  filesystem with file.
