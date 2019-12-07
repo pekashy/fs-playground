@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <zconf.h>
-//#include <linux/ext2_fs.h> // most likely
+//#include <linux/ext2_fs.h> // most likely and on ubuntu
 #include "/usr/include/ext2fs/ext2_fs.h" // on arch
 
 #define BASE_OFFSET 1024                   /* locates beginning of the super block (first group) */
@@ -64,7 +64,6 @@ void read_triple(int _fd, int num) {
         read_double(_fd, double_indirect_block[i]);
     }
 }
-
 
 void print_file_contents(int fd, struct ext2_inode *inode, struct ext2_group_desc *group) {
     void *block;
@@ -139,12 +138,22 @@ void print_dir_entries(int fd, struct ext2_inode *inode, struct ext2_group_desc 
     }
 }
 
-void run_over_dir_tree(int fd, struct ext2_inode *inode, struct ext2_group_desc *group, int x_inode,
-                       void (*print_f)(int, struct ext2_inode *, struct ext2_group_desc *)) {
+int compare_by_name(char *name, int inode, char *x_name, int x_inode) {
+    return !strcmp(name, x_name);
+}
+
+int compare_by_inode(char *name, int inode, char *x_name, int x_inode) {
+    return inode == x_inode;
+}
+
+void run_over_dir_tree(int fd, struct ext2_inode *inode, struct ext2_group_desc *group, char *x_name, int x_inode,
+                       void (*print_f)(int, struct ext2_inode *, struct ext2_group_desc *),
+                       int (*compare_f)(char *, int, char *, int)) {
     void *block;
     if (S_ISDIR(inode->i_mode)) {
         struct ext2_dir_entry_2 *entry;
         unsigned int size = 0;
+
         if ((block = malloc(i_block_size)) == NULL) { /* allocate memory for the data block */
             fprintf(stderr, "Memory error\n");
             close(fd);
@@ -153,16 +162,16 @@ void run_over_dir_tree(int fd, struct ext2_inode *inode, struct ext2_group_desc 
         lseek(fd, BLOCK_OFFSET(inode->i_block[0]), SEEK_SET);
         read(fd, block, i_block_size);                /* read block from disk*/
         entry = (struct ext2_dir_entry_2 *) block;  /* first entry in the directory */
-        /* Notice that the list may be terminated with a NULL
-           entry (entry->inode == NULL)*/
+
         while ((size < inode->i_size) && entry->inode) {
             read_inode(fd, entry->inode, group, inode);
-            if (entry->inode == x_inode) {
+            if (compare_f(entry->name, entry->inode, x_name, x_inode)) {
                 print_f(fd, inode, group);
+                free(block);
                 return;
             }
             if (entry->file_type == 0x2 && strcmp(entry->name, ".") && strcmp(entry->name, "..")) {
-                run_over_dir_tree(fd, inode, group, x_inode, print_f);
+                run_over_dir_tree(fd, inode, group, x_name, x_inode, print_f, compare_f);
             }
             entry = (void *) entry + entry->rec_len;
             size += entry->rec_len;
@@ -209,35 +218,34 @@ struct ext2_params init_ext2() {
 
 void print_dir_entries_by_inode(int inode) {
     struct ext2_params ext2_instance = init_ext2();
-    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode, &ext2_instance.s_first_group, inode,
-                      print_dir_entries);
+    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode,
+                      &ext2_instance.s_first_group, NULL, inode, print_dir_entries, compare_by_inode);
     close(ext2_instance.fd);
 }
 
 void print_file_contents_by_inode(int inode) {
     struct ext2_params ext2_instance = init_ext2();
-    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode, &ext2_instance.s_first_group, inode,
-                      print_file_contents);
+    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode,
+                      &ext2_instance.s_first_group, NULL, inode, print_file_contents, compare_by_inode);
     close(ext2_instance.fd);
 }
 
-/*
-void print_dir_entries_by_name(char* name) {
+
+void print_dir_entries_by_name(char *name) {
     struct ext2_params ext2_instance = init_ext2();
-    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode, &ext2_instance.s_first_group, inode,
-                      print_dir_entries);
+    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode,
+                      &ext2_instance.s_first_group, name, 2, print_file_contents, compare_by_name);
     close(ext2_instance.fd);
 }
 
-void print_file_contents_by_name(char* name) {
+void print_file_contents_by_name(char *name) {
     struct ext2_params ext2_instance = init_ext2();
-    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode, &ext2_instance.s_first_group, inode,
-                      print_file_contents);
+    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode,
+                      &ext2_instance.s_first_group, name, 2, print_file_contents, compare_by_name);
     close(ext2_instance.fd);
 }
-*/
+
 int main(int argc, char **argv) {
-    print_dir_entries_by_inode(2);
-    print_file_contents_by_inode(12);
+    print_file_contents_by_name("bigfile");
     printf("\n--------------\nend\n");
 }
