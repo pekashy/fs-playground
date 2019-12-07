@@ -189,7 +189,7 @@ void print_file_contents_by_inode(int inode) {
                       print_file_contents);
     close(ext2_instance.fd);
 }
-
+/*
 void print_dir_entries_by_name(char* name) {
     struct ext2_params ext2_instance = init_ext2();
     run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode, &ext2_instance.s_first_group, inode,
@@ -203,7 +203,7 @@ void print_file_contents_by_name(char* name) {
                       print_file_contents);
     close(ext2_instance.fd);
 }
-
+*/
 int main(int argc, char **argv) {
     print_dir_entries_by_inode(23);
     print_file_contents_by_inode(35);

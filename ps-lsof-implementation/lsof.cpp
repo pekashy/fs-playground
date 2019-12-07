@@ -15,12 +15,13 @@ vector<string> get_open_files(char *pid) {
     struct dirent *de;
     while ((de = readdir(dr)) != NULL) {
         char opened_file[1024];
-        if (readlink((dir_fd + string(de->d_name)).c_str(), opened_file,
-                     sizeof(opened_file) - 1)) {
+        int len = readlink((dir_fd + string(de->d_name)).c_str(), opened_file,
+                           sizeof(opened_file) - 1);
+        if (len) {
+            opened_file[len] = 0; // truncate
             opened_files.push_back(opened_file);
         }
     }
-    return opened_files;
 }
 
 int main(int argc, char *argv[]) {

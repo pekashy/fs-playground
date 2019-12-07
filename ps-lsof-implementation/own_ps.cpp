@@ -30,6 +30,7 @@ char *decode_tty(int32_t tty) {
             return ttyName;
         }
     }
+    return NULL; // Never get here
 };
 
 int main(int argc, char *argv[]) {
@@ -41,7 +42,7 @@ int main(int argc, char *argv[]) {
             return 0;
         }
         struct dirent *de;
-        printf("PID\t| TTY\t| COMMAND\n");
+        printf("PID\t| UID\t| TTY\t| COMMAND\n");
         while ((de = readdir(dr)) != NULL) {
             uint32_t _pid = atoi(de->d_name);
             if (_pid) {
@@ -54,7 +55,7 @@ int main(int argc, char *argv[]) {
                     free(tty);
                     tty = decode_tty(info.tty);
                 }
-                printf("%d\t| %s\t| %s\n", _pid, tty, info.exName);
+                printf("%d\t| %s\t| %d\t| %s\n", _pid, tty, info.euid, info.exName);
                 free(tty);
             }
 
