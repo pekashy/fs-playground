@@ -39,31 +39,41 @@ void read_inode(int fd, int i_inode_no, const struct ext2_group_desc *s_group, s
     read(fd, ps_inode, sizeof(struct ext2_inode));
 } /* read_inode() */
 
-void read_single(char *block_data, int _fd, int num) {
+void read_direct(char *block_data, int _fd, int num) {
     lseek(_fd, i_block_size * num, SEEK_SET);
     int n_read = read(_fd, block_data, i_block_size);
     block_data[n_read] = 0;
 }
 
-void read_double(int _fd, int num) { // printing here
+void read_indirect(int _fd, int num) { // printing here
     lseek(_fd, i_block_size * num, SEEK_SET);
-    int indirect_block[i_block_size / 4];
-    int n_read = read(_fd, &indirect_block, i_block_size);
+    int direct_blocks[i_block_size / 4];
+    int n_read = read(_fd, &direct_blocks, i_block_size);
     char block_data[1024];
-    for (int i = 0; indirect_block[i] && i < n_read; i++) {
-        read_single(block_data, _fd, indirect_block[i]);
+    for (int i = 0; direct_blocks[i] && i < n_read; i++) {
+        read_direct(block_data, _fd, direct_blocks[i]);
         printf("%s", block_data);
     }
 }
 
-void read_triple(int _fd, int num) {
+void read_double_indirect(int _fd, int num) {
     lseek(_fd, i_block_size * num, SEEK_SET);
-    int double_indirect_block[i_block_size / 4];
-    int n_read = read(_fd, &double_indirect_block, i_block_size);
-    for (int i = 0; double_indirect_block[i] && i < n_read; i++) {
-        read_double(_fd, double_indirect_block[i]);
+    int indirect_blocks[i_block_size / 4];
+    int n_read = read(_fd, &indirect_blocks, i_block_size);
+    for (int i = 0; indirect_blocks[i] && i < n_read; i++) {
+        read_indirect(_fd, indirect_blocks[i]);
     }
 }
+
+void read_triple_indirect(int _fd, int num) {
+    lseek(_fd, i_block_size * num, SEEK_SET);
+    int double_indirect_blocks[i_block_size / 4];
+    int n_read = read(_fd, &double_indirect_blocks, i_block_size);
+    for (int i = 0; double_indirect_blocks[i] && i < n_read; i++) {
+        read_double_indirect(_fd, double_indirect_blocks[i]);
+    }
+}
+
 
 void print_file_contents(int fd, struct ext2_inode *inode, struct ext2_group_desc *group) {
     void *block;
@@ -79,21 +89,19 @@ void print_file_contents(int fd, struct ext2_inode *inode, struct ext2_group_des
         lseek(fd, BLOCK_OFFSET(inode->i_block[0]), SEEK_SET);
         read(fd, block, i_block_size);                /* read block from disk*/
         entry = (struct ext2_dir_entry_2 *) block;  /* first entry in the directory */
-        /* Notice that the list may be terminated with a NULL
-           entry (entry->inode == NULL)*/
         int _fd = dup(fd);
         char block_data[i_block_size + 1];
         while ((size < inode->i_size) && entry->inode) {
             for (int i = 0; inode->i_block[i]; i++) {
                 if (i < 12) {
-                    read_single(block_data, _fd, inode->i_block[i]);
+                    read_direct(block_data, _fd, inode->i_block[i]);
                     printf("%s", block_data);
-                }
-                if (i == 12) {
-                    read_double(_fd, inode->i_block[i]);
-                }
-                if (i == 13) {
-                    read_triple(_fd, inode->i_block[i]);
+                } else if (i == 12) {
+                    read_indirect(_fd, inode->i_block[i]);
+                } else if (i == 13) {
+                    read_double_indirect(_fd, inode->i_block[i]);
+                } else if (i == 14) {
+                    read_triple_indirect(_fd, inode->i_block[i]);
                 }
             }
 
@@ -229,7 +237,6 @@ void print_file_contents_by_inode(int inode) {
                       &ext2_instance.s_first_group, NULL, inode, print_file_contents, compare_by_inode);
     close(ext2_instance.fd);
 }
-
 
 void print_dir_entries_by_name(char *name) {
     struct ext2_params ext2_instance = init_ext2();
