@@ -13,6 +13,7 @@
 #define FS_IMAGE "testfs3.img"               /* the file system image */
 #define BLOCK_OFFSET(i_block) (BASE_OFFSET+(i_block-1)*i_block_size)
 int i_block_size;
+struct ext2_params ext2_instance;
 
 struct ext2_params {
     int fd;
@@ -154,6 +155,7 @@ int compare_by_inode(char *name, int inode, char *x_name, int x_inode) {
     return inode == x_inode;
 }
 
+
 void run_over_dir_tree(int fd, struct ext2_inode *inode, struct ext2_group_desc *group, char *x_name, int x_inode,
                        void (*print_f)(int, struct ext2_inode *, struct ext2_group_desc *),
                        int (*compare_f)(char *, int, char *, int)) {
@@ -189,7 +191,33 @@ void run_over_dir_tree(int fd, struct ext2_inode *inode, struct ext2_group_desc 
     }
 } /* read_dir() */
 
-struct ext2_params init_ext2() {
+
+void print_dir_entries_by_inode(int inode) {
+    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode,
+                      &ext2_instance.s_first_group, NULL, inode, print_dir_entries, compare_by_inode);
+    close(ext2_instance.fd);
+}
+
+void print_file_contents_by_inode(int inode) {
+    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode,
+                      &ext2_instance.s_first_group, NULL, inode, print_file_contents, compare_by_inode);
+    close(ext2_instance.fd);
+}
+
+void print_dir_entries_by_name(char *name) {
+    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode,
+                      &ext2_instance.s_first_group, name, 2, print_file_contents, compare_by_name);
+    close(ext2_instance.fd);
+}
+
+void print_file_contents_by_name(char *name) {
+    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode,
+                      &ext2_instance.s_first_group, name, 2, print_file_contents, compare_by_name);
+    close(ext2_instance.fd);
+}
+
+
+void init_ext2() {
     char cwd[PATH_MAX];
     if (getcwd(cwd, sizeof(cwd)) != NULL) {
         printf("Current working dir: %s\n", cwd);
@@ -214,45 +242,16 @@ struct ext2_params init_ext2() {
 
     read_inode(fd, 2, &s_first_group, &s_root_dir_inode);   /* read inode 2 (root directory) */
 
-    struct ext2_params ext2_inited;
-    ext2_inited.s_super = s_super;
-    ext2_inited.s_first_group = s_first_group;
-    ext2_inited.s_root_dir_inode = s_root_dir_inode;
-    ext2_inited.i_block_size = i_block_size;
-    ext2_inited.fd = fd;
-
-    return ext2_inited;
-}
-
-void print_dir_entries_by_inode(int inode) {
-    struct ext2_params ext2_instance = init_ext2();
-    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode,
-                      &ext2_instance.s_first_group, NULL, inode, print_dir_entries, compare_by_inode);
-    close(ext2_instance.fd);
-}
-
-void print_file_contents_by_inode(int inode) {
-    struct ext2_params ext2_instance = init_ext2();
-    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode,
-                      &ext2_instance.s_first_group, NULL, inode, print_file_contents, compare_by_inode);
-    close(ext2_instance.fd);
-}
-
-void print_dir_entries_by_name(char *name) {
-    struct ext2_params ext2_instance = init_ext2();
-    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode,
-                      &ext2_instance.s_first_group, name, 2, print_file_contents, compare_by_name);
-    close(ext2_instance.fd);
-}
-
-void print_file_contents_by_name(char *name) {
-    struct ext2_params ext2_instance = init_ext2();
-    run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode,
-                      &ext2_instance.s_first_group, name, 2, print_file_contents, compare_by_name);
-    close(ext2_instance.fd);
+    ext2_instance.s_super = s_super;
+    ext2_instance.s_first_group = s_first_group;
+    ext2_instance.s_root_dir_inode = s_root_dir_inode;
+    ext2_instance.i_block_size = i_block_size;
+    ext2_instance.fd = fd;
 }
 
 int main(int argc, char **argv) {
+    init_ext2();
+
     print_file_contents_by_name("bigfile");
     printf("\n--------------\nend\n");
 }
