@@ -10,7 +10,7 @@
 #include "/usr/include/ext2fs/ext2_fs.h" // on arch
 
 #define BASE_OFFSET 1024                   /* locates beginning of the super block (first group) */
-#define FS_IMAGE "testfs2.img"               /* the file system image */
+#define FS_IMAGE "testfs3.img"               /* the file system image */
 #define BLOCK_OFFSET(i_block) (BASE_OFFSET+(i_block-1)*i_block_size)
 int i_block_size;
 
@@ -39,6 +39,33 @@ void read_inode(int fd, int i_inode_no, const struct ext2_group_desc *s_group, s
     read(fd, ps_inode, sizeof(struct ext2_inode));
 } /* read_inode() */
 
+void read_single(char *block_data, int _fd, int num) {
+    lseek(_fd, i_block_size * num, SEEK_SET);
+    int n_read = read(_fd, block_data, i_block_size);
+    block_data[n_read] = 0;
+}
+
+void read_double(int _fd, int num) { // printing here
+    lseek(_fd, i_block_size * num, SEEK_SET);
+    int indirect_block[i_block_size / 4];
+    int n_read = read(_fd, &indirect_block, i_block_size);
+    char block_data[1024];
+    for (int i = 0; indirect_block[i] && i < n_read; i++) {
+        read_single(block_data, _fd, indirect_block[i]);
+        printf("%s", block_data);
+    }
+}
+
+void read_triple(int _fd, int num) {
+    lseek(_fd, i_block_size * num, SEEK_SET);
+    int double_indirect_block[i_block_size / 4];
+    int n_read = read(_fd, &double_indirect_block, i_block_size);
+    for (int i = 0; double_indirect_block[i] && i < n_read; i++) {
+        read_double(_fd, double_indirect_block[i]);
+    }
+}
+
+
 void print_file_contents(int fd, struct ext2_inode *inode, struct ext2_group_desc *group) {
     void *block;
     if (!S_ISDIR(inode->i_mode)) {
@@ -55,19 +82,24 @@ void print_file_contents(int fd, struct ext2_inode *inode, struct ext2_group_des
         entry = (struct ext2_dir_entry_2 *) block;  /* first entry in the directory */
         /* Notice that the list may be terminated with a NULL
            entry (entry->inode == NULL)*/
-        int i = 0;
         int _fd = dup(fd);
+        char block_data[i_block_size + 1];
         while ((size < inode->i_size) && entry->inode) {
-            char block_data[i_block_size + 1];
-            if (i < 12) {
-                lseek(_fd, i_block_size * inode->i_block[i], SEEK_SET);
-                read(_fd, block_data, sizeof(struct ext2_inode));
-                block_data[i_block_size] = 0;     /* append null character to the file name */
-                printf("%s", block_data);
+            for (int i = 0; inode->i_block[i]; i++) {
+                if (i < 12) {
+                    read_single(block_data, _fd, inode->i_block[i]);
+                    printf("%s", block_data);
+                }
+                if (i == 12) {
+                    read_double(_fd, inode->i_block[i]);
+                }
+                if (i == 13) {
+                    read_triple(_fd, inode->i_block[i]);
+                }
             }
+
             entry = (void *) entry + entry->rec_len;
             size += entry->rec_len;
-            ++i;
         }
 
         free(block);
@@ -175,7 +207,6 @@ struct ext2_params init_ext2() {
     return ext2_inited;
 }
 
-
 void print_dir_entries_by_inode(int inode) {
     struct ext2_params ext2_instance = init_ext2();
     run_over_dir_tree(ext2_instance.fd, &ext2_instance.s_root_dir_inode, &ext2_instance.s_first_group, inode,
@@ -189,6 +220,7 @@ void print_file_contents_by_inode(int inode) {
                       print_file_contents);
     close(ext2_instance.fd);
 }
+
 /*
 void print_dir_entries_by_name(char* name) {
     struct ext2_params ext2_instance = init_ext2();
@@ -205,7 +237,7 @@ void print_file_contents_by_name(char* name) {
 }
 */
 int main(int argc, char **argv) {
-    print_dir_entries_by_inode(23);
-    print_file_contents_by_inode(35);
-    printf("end\n");
+    print_dir_entries_by_inode(2);
+    print_file_contents_by_inode(12);
+    printf("\n--------------\nend\n");
 }
