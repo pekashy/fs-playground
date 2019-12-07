@@ -34,7 +34,13 @@ char *decode_tty(int32_t tty) {
 };
 
 int main(int argc, char *argv[]) {
-    std::string arg(argv[1]);
+    std::string arg;
+    if(argc > 0){
+        arg = std::string(argv[1]);
+    }
+    else {
+        return 1;
+    }
     if (arg == "-A" || arg == "-e") {
         DIR *dr = opendir("/proc/");
         if (dr == nullptr) {
