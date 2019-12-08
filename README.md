@@ -11,3 +11,4 @@ to draw attention to usage of system functions call.
  `ps` and `lsof` commands from /proc/ filesystem. 
  3. `fuse` A simple fuse filesystem driver, demonstrating mounting
   filesystem with file.
+ 4. `ext2` A simple ext2 filesystem driver, demonstrating adressing by name and inode in ext2.
