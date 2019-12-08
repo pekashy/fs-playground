@@ -10,7 +10,6 @@
 #include "/usr/include/ext2fs/ext2_fs.h" // on arch
 
 #define BASE_OFFSET 1024                   /* locates beginning of the super block (first group) */
-#define FS_IMAGE "testfs2.img"               /* the file system image */
 #define BLOCK_OFFSET(i_block) (BASE_OFFSET+(i_block-1)*i_block_size)
 
 uint32_t i_block_size;
@@ -253,7 +252,7 @@ void print_file_contents_by_name(char *name) {
 }
 
 
-void init_ext2() {
+void init_ext2(char* path_to_image) {
     char cwd[PATH_MAX];
     if (getcwd(cwd, sizeof(cwd)) != NULL) {
         printf("Current working dir: %s\n", cwd);
@@ -262,7 +261,7 @@ void init_ext2() {
         exit(1);
     }
 
-    if ((fd = open(FS_IMAGE, O_RDONLY)) < 0) {
+    if ((fd = open(path_to_image, O_RDONLY)) < 0) {
         perror(FS_IMAGE);
         exit(1);
     }
@@ -281,10 +280,34 @@ void init_ext2() {
 }
 
 int main(int argc, char **argv) {
-    init_ext2();
-    //print_dir_entries_by_inode(2);
-    print_file_contents_by_name("Makefile");
-    print_file_contents_by_inode(55);
+    if(argc < 5){
+        printf("Please specify: _path to filesystem image_ task (-entries/-contents) way (-inode/-name) path (inode/path to file with no '/' at the beginning)");
+        exit(1);
+    }
+    if(strcmp(argv[2], "-entries") && strcmp(argv[2], "-contents")){
+        printf("Call -entries for dir entries. -contents for file contents");
+        exit(1);
+    }
+    if(strcmp(argv[3], "-inode") && strcmp(argv[3], "-name")){
+        printf("Call -inode to address by inode. -name to address by filename");
+        exit(1);
+    }
+    init_ext2(argv[1]);
+
+    if(!strcmp(argv[2], "-entries")){
+        if(!strcmp(argv[3], "-inode")){
+
+            print_dir_entries_by_inode(atoi(argv[4]));
+        } else {
+            print_dir_entries_by_name(argv[4]);
+        }
+    } else {
+        if(!strcmp(argv[3], "-inode")){
+            print_file_contents_by_inode(atoi(argv[4]));
+        } else {
+            print_file_contents_by_name(argv[4]);
+        }
+    }
 
     printf("\n--------------\nend\n");
     close(fd);
