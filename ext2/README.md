@@ -4,7 +4,7 @@ Simple driver which shows printing dir entries or file contents by its name or i
 ext2 filesystem.
 
 Example of usage: `ext2_driver testfs2.img -contents -name Makefile` - this will print contents
-of makefile.
+of 'Makefile'.
 
 or
 
