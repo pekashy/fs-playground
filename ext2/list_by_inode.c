@@ -182,20 +182,21 @@ void print_dir_entries(struct ext2_inode *inode, struct ext2_group_desc *group) 
     }
 }
 
-int compare_by_name(char *name, uint32_t inode, char *x_name, uint32_t x_inode) {
-    return !strcmp(name, x_name);
+int compare_by_name(char *path, char *name, uint32_t inode, char *x_name, uint32_t x_inode) {
+    return !strcmp(path, x_name);
 }
 
-int compare_by_inode(char *name, uint32_t inode, char *x_name, uint32_t x_inode) {
+int compare_by_inode(char *path, char *name, uint32_t inode, char *x_name, uint32_t x_inode) {
     return inode == x_inode;
 }
 
 
-void run_over_dir_tree(struct ext2_inode *inode, struct ext2_group_desc *group, char *x_name, uint32_t x_inode,
+void run_over_dir_tree(struct ext2_inode inode, struct ext2_group_desc *group, char *x_name, uint32_t x_inode,
                        void (*print_f)(struct ext2_inode *, struct ext2_group_desc *),
-                       int (*compare_f)(char *, uint32_t, char *, uint32_t)) {
+                       int (*compare_f)(char *, char *, uint32_t, char *, uint32_t),
+                       char *_path) {
     void *block;
-    if (S_ISDIR(inode->i_mode)) {
+    if (S_ISDIR(inode.i_mode)) {
         struct ext2_dir_entry_2 *entry;
         uint32_t size = 0;
 
@@ -204,24 +205,38 @@ void run_over_dir_tree(struct ext2_inode *inode, struct ext2_group_desc *group, 
             close(fd);
             exit(1);
         }
-        lseek(fd, BLOCK_OFFSET(inode->i_block[0]), SEEK_SET);
+        lseek(fd, BLOCK_OFFSET(inode.i_block[0]), SEEK_SET);
         read(fd, block, i_block_size);                /* read block from disk*/
         entry = (struct ext2_dir_entry_2 *) block;  /* first entry in the directory */
+        char path[1024];
 
-        while ((size < inode->i_size) && entry->inode) {
-            read_inode(entry->inode, group, inode);
+        while ((size < inode.i_size) && entry->inode) {
+            read_inode(entry->inode, group, &inode);
             char name[entry->name_len + 1];
             memcpy(name, entry->name, entry->name_len);
             name[entry->name_len] = 0;
-            if (compare_f(name, entry->inode, x_name, x_inode)) {
-                print_f(inode, group);
+
+            strcpy(path, _path);
+            if (strlen(_path)) {
+                uint len = strlen(_path);
+                path[len] = '/';
+                path[len + 1] = 0;
+            } else {
+                path[0] = 0;
+            }
+            strcat(path, name);
+
+
+            if (compare_f(path, name, entry->inode, x_name, x_inode)) {
+                print_f(&inode, group);
                 free(block);
                 return;
             }
 
             if (entry->file_type == 0x2 && strcmp(name, ".") && strcmp(name, "..")) {
-                run_over_dir_tree(inode, group, x_name, x_inode, print_f, compare_f);
+                run_over_dir_tree(inode, group, x_name, x_inode, print_f, compare_f, path);
             }
+
             entry = (void *) entry + entry->rec_len;
             size += entry->rec_len;
         }
@@ -232,27 +247,38 @@ void run_over_dir_tree(struct ext2_inode *inode, struct ext2_group_desc *group, 
 
 
 void print_dir_entries_by_inode(uint32_t inode) {
-    run_over_dir_tree(&ext2_instance.s_root_dir_inode,
-                      &ext2_instance.s_first_group, NULL, inode, print_dir_entries, compare_by_inode);
+    char path[1];
+    path[0] = 0;
+    run_over_dir_tree(ext2_instance.s_root_dir_inode,
+                      &ext2_instance.s_first_group, NULL, inode, print_dir_entries, compare_by_inode, path);
 }
 
 void print_file_contents_by_inode(uint32_t inode) {
-    run_over_dir_tree(&ext2_instance.s_root_dir_inode,
-                      &ext2_instance.s_first_group, NULL, inode, print_file_contents, compare_by_inode);
+    char path[1];
+    path[0] = 0;
+
+    run_over_dir_tree(ext2_instance.s_root_dir_inode,
+                      &ext2_instance.s_first_group, NULL, inode, print_file_contents, compare_by_inode, path);
 }
 
 void print_dir_entries_by_name(char *name) {
-    run_over_dir_tree(&ext2_instance.s_root_dir_inode,
-                      &ext2_instance.s_first_group, name, 2, print_file_contents, compare_by_name);
+    char path[1];
+    path[0] = 0;
+
+    run_over_dir_tree(ext2_instance.s_root_dir_inode,
+                      &ext2_instance.s_first_group, name, 2, print_dir_entries, compare_by_name, path);
 }
 
 void print_file_contents_by_name(char *name) {
-    run_over_dir_tree(&ext2_instance.s_root_dir_inode,
-                      &ext2_instance.s_first_group, name, 2, print_file_contents, compare_by_name);
+    char path[1];
+    path[0] = 0;
+
+    run_over_dir_tree(ext2_instance.s_root_dir_inode,
+                      &ext2_instance.s_first_group, name, 2, print_file_contents, compare_by_name, path);
 }
 
 
-void init_ext2(char* path_to_image) {
+void init_ext2(char *path_to_image) {
     char cwd[PATH_MAX];
     if (getcwd(cwd, sizeof(cwd)) != NULL) {
         printf("Current working dir: %s\n", cwd);
@@ -262,7 +288,7 @@ void init_ext2(char* path_to_image) {
     }
 
     if ((fd = open(path_to_image, O_RDONLY)) < 0) {
-        perror(FS_IMAGE);
+        // perror(FS_IMAGE);
         exit(1);
     }
 
@@ -280,29 +306,29 @@ void init_ext2(char* path_to_image) {
 }
 
 int main(int argc, char **argv) {
-    if(argc < 5){
+    if (argc < 5) {
         printf("Please specify: _path to filesystem image_ task (-entries/-contents) way (-inode/-name) path (inode/path to file with no '/' at the beginning)");
         exit(1);
     }
-    if(strcmp(argv[2], "-entries") && strcmp(argv[2], "-contents")){
+    if (strcmp(argv[2], "-entries") && strcmp(argv[2], "-contents")) {
         printf("Call -entries for dir entries. -contents for file contents");
         exit(1);
     }
-    if(strcmp(argv[3], "-inode") && strcmp(argv[3], "-name")){
+    if (strcmp(argv[3], "-inode") && strcmp(argv[3], "-name")) {
         printf("Call -inode to address by inode. -name to address by filename");
         exit(1);
     }
     init_ext2(argv[1]);
 
-    if(!strcmp(argv[2], "-entries")){
-        if(!strcmp(argv[3], "-inode")){
+    if (!strcmp(argv[2], "-entries")) {
+        if (!strcmp(argv[3], "-inode")) {
 
             print_dir_entries_by_inode(atoi(argv[4]));
         } else {
             print_dir_entries_by_name(argv[4]);
         }
     } else {
-        if(!strcmp(argv[3], "-inode")){
+        if (!strcmp(argv[3], "-inode")) {
             print_file_contents_by_inode(atoi(argv[4]));
         } else {
             print_file_contents_by_name(argv[4]);
